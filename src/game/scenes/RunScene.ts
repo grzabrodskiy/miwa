@@ -54,34 +54,41 @@ interface SpeechBubbleState {
   width: number;
 }
 
+interface WorldRect {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
 const OWNER_RENDER = {
   width: 150,
   height: 218,
   originX: 0.5,
   originY: 0.93,
-  groundOffset: 24,
-  shadowOffsetY: 18
+  groundOffset: 46
 } as const;
 
 const DOG_RENDER = {
-  width: 202,
-  height: 134,
+  width: 263,
+  height: 174,
   originX: 0.44,
   originY: 0.84,
-  groundOffset: 22,
-  shadowOffsetY: 18
+  groundOffset: 60,
+  shadowOffsetY: 22
 } as const;
 
 const DOG_LEG_RENDER = {
-  width: 22,
-  height: 58,
+  width: 29,
+  height: 75,
   originX: 0.5,
   originY: 0.12
 } as const;
 
 const BUBBLE_TUNING = {
   durationMs: 2000,
-  margin: 16
+  margin: 16,
+  clearance: 12
 } as const;
 
 export class RunScene extends Phaser.Scene {
@@ -112,9 +119,7 @@ export class RunScene extends Phaser.Scene {
   private roundManager!: RoundManager;
   private state!: RoundSimulationState;
   private inputRouter!: InputRouter;
-  private ownerShadow!: Phaser.GameObjects.Ellipse;
   private ownerSprite!: Phaser.GameObjects.Image;
-  private dogShadow!: Phaser.GameObjects.Ellipse;
   private dogBackLegs!: Phaser.GameObjects.Image[];
   private dogFrontLegs!: Phaser.GameObjects.Image[];
   private dogSprite!: Phaser.GameObjects.Image;
@@ -126,10 +131,10 @@ export class RunScene extends Phaser.Scene {
   private roundStaminaUsed = 0;
   private readonly activeSpeechBubbles = new Map<string, SpeechBubbleState>();
   private readonly reactedDistractionIds = new Set<string>();
-  private ownerLeashAnchorOffsetX = 42;
-  private ownerLeashAnchorOffsetY = -82;
-  private dogLeashAnchorOffsetX = -42;
-  private dogLeashAnchorOffsetY = -42;
+  private ownerLeashAnchorOffsetX = -28;
+  private ownerLeashAnchorOffsetY = -86;
+  private dogLeashAnchorOffsetX = -56;
+  private dogLeashAnchorOffsetY = -50;
 
   constructor() {
     super(SCENE_KEYS.run);
@@ -414,32 +419,12 @@ export class RunScene extends Phaser.Scene {
     const ownerBaseY = this.getOwnerBaseY();
     const dogBaseY = this.getDogBaseY();
 
-    this.ownerShadow = this.add
-      .ellipse(
-        this.state.owner.x,
-        this.roundDefinition.groundY + OWNER_RENDER.shadowOffsetY,
-        74,
-        20,
-        0x2e241d,
-        0.18
-      )
-      .setDepth(4);
     this.ownerSprite = this.add
       .image(this.state.owner.x, ownerBaseY, CHARACTER_TEXTURE_KEYS.ownerWalk)
       .setOrigin(OWNER_RENDER.originX, OWNER_RENDER.originY)
       .setDisplaySize(OWNER_RENDER.width, OWNER_RENDER.height)
       .setDepth(12);
 
-    this.dogShadow = this.add
-      .ellipse(
-        this.state.dog.x,
-        this.roundDefinition.groundY + DOG_RENDER.shadowOffsetY,
-        108,
-        20,
-        0x2e241d,
-        0.2
-      )
-      .setDepth(5);
     this.dogBackLegs = [0, 1].map(() =>
       this.add
         .image(this.state.dog.x, dogBaseY, CHARACTER_TEXTURE_KEYS.shibaLegBack)
@@ -564,24 +549,20 @@ export class RunScene extends Phaser.Scene {
     const bracing = this.state.leashTension > 0.58 || this.state.owner.velocityX < 48;
     const textureKey = bracing
       ? CHARACTER_TEXTURE_KEYS.ownerBrace
-      : CHARACTER_TEXTURE_KEYS.ownerWalk;
+      : stride >= 0
+        ? CHARACTER_TEXTURE_KEYS.ownerWalk
+        : CHARACTER_TEXTURE_KEYS.ownerWalkAlt;
     const yOffset = bracing ? 2 : stride * 2.5;
     const ownerBaseY = this.getOwnerBaseY();
 
-    this.ownerShadow
-      .setPosition(
-        this.state.owner.x + 2,
-        this.roundDefinition.groundY + OWNER_RENDER.shadowOffsetY
-      )
-      .setScale(bracing ? 1.06 : 1 + Math.abs(stride) * 0.04, 1);
     this.ownerSprite
       .setTexture(textureKey)
       .setPosition(this.state.owner.x, ownerBaseY + yOffset)
       .setScale(this.state.owner.facing, 1)
       .setRotation((bracing ? -0.03 : stride * 0.02) * this.state.owner.facing);
 
-    this.ownerLeashAnchorOffsetX = bracing ? 46 : 40;
-    this.ownerLeashAnchorOffsetY = bracing ? -72 : -78;
+    this.ownerLeashAnchorOffsetX = bracing ? -24 : -28;
+    this.ownerLeashAnchorOffsetY = bracing ? -82 : -86;
   }
 
   private applyDogPose(locomotionState: DogLocomotionState): void {
@@ -594,14 +575,8 @@ export class RunScene extends Phaser.Scene {
 
     this.dogSprite.setAlpha(1);
     this.dogBarkText.setVisible(false);
-    this.dogShadow
-      .setPosition(
-        this.state.dog.x + 2,
-        this.roundDefinition.groundY + DOG_RENDER.shadowOffsetY
-      )
-      .setScale(1, 1);
-    this.dogLeashAnchorOffsetX = -42;
-    this.dogLeashAnchorOffsetY = -38;
+    this.dogLeashAnchorOffsetX = -56;
+    this.dogLeashAnchorOffsetY = -50;
 
     switch (locomotionState) {
       case "walk_forward": {
@@ -615,17 +590,15 @@ export class RunScene extends Phaser.Scene {
         textureKey = CHARACTER_TEXTURE_KEYS.shibaPullBackward;
         dogYOffset = 3;
         rotation = -0.03 * this.state.dog.facing;
-        this.dogShadow.setScale(1.08, 1);
-        this.dogLeashAnchorOffsetX = -50;
-        this.dogLeashAnchorOffsetY = -32;
+        this.dogLeashAnchorOffsetX = -62;
+        this.dogLeashAnchorOffsetY = -42;
         break;
       }
       case "sit_refuse": {
         textureKey = CHARACTER_TEXTURE_KEYS.shibaSitRefuse;
         dogYOffset = 10;
-        this.dogShadow.setScale(1.02, 1.04);
-        this.dogLeashAnchorOffsetX = -34;
-        this.dogLeashAnchorOffsetY = -22;
+        this.dogLeashAnchorOffsetX = -46;
+        this.dogLeashAnchorOffsetY = -30;
         break;
       }
       case "tired_recover": {
@@ -633,8 +606,8 @@ export class RunScene extends Phaser.Scene {
         dogYOffset = 12;
         this.dogSprite.setAlpha(0.82);
         rotation = 0.03 * this.state.dog.facing;
-        this.dogLeashAnchorOffsetX = -28;
-        this.dogLeashAnchorOffsetY = -18;
+        this.dogLeashAnchorOffsetX = -40;
+        this.dogLeashAnchorOffsetY = -24;
         break;
       }
       case "bark_one_shot": {
@@ -670,9 +643,9 @@ export class RunScene extends Phaser.Scene {
     bodyY: number
   ): void {
     const direction = this.state.dog.facing;
-    const baseHipY = bodyY - 52;
-    const relaxedRearX = [-44, -26];
-    const relaxedFrontX = [10, 30];
+    const baseHipY = bodyY - 68;
+    const relaxedRearX = [-32, -18];
+    const relaxedFrontX = [8, 24];
     const walkSwing = Math.sin(animationPhase * 10);
     const walkLift = Math.max(0, Math.cos(animationPhase * 10)) * 4;
 
@@ -777,8 +750,6 @@ export class RunScene extends Phaser.Scene {
     this.traceQuadratic(ownerX, ownerY + 2, controlX, controlY + 2, dogX, dogY + 2, sampleCount);
     this.leashGraphics.lineStyle(leashWidth, leashColor, 0.96);
     this.traceQuadratic(ownerX, ownerY, controlX, controlY, dogX, dogY, sampleCount);
-    this.leashGraphics.fillStyle(0x2f1f14, 1).fillCircle(ownerX, ownerY, 4);
-    this.leashGraphics.fillStyle(0x40505c, 1).fillCircle(dogX, dogY, 4);
   }
 
   private traceQuadratic(
@@ -1252,6 +1223,13 @@ export class RunScene extends Phaser.Scene {
 
   private updateSpeechBubbles(): void {
     const worldView = this.cameras.main.worldView;
+    const exclusionRects = this.getSpeechBubbleExclusionRects();
+    const placedBubbles: Array<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }> = [];
 
     for (const [key, bubble] of this.activeSpeechBubbles.entries()) {
       if (this.time.now >= bubble.expiresAt) {
@@ -1269,14 +1247,112 @@ export class RunScene extends Phaser.Scene {
         worldView.x + bubble.width * 0.5 + BUBBLE_TUNING.margin,
         worldView.right - bubble.width * 0.5 - BUBBLE_TUNING.margin
       );
-      const y = Phaser.Math.Clamp(
+      let y = Phaser.Math.Clamp(
         anchorPosition.y + bubble.offsetY,
         worldView.y + bubble.height * 0.5 + BUBBLE_TUNING.margin,
         worldView.bottom - bubble.height * 0.5 - BUBBLE_TUNING.margin
       );
 
+      for (const placedBubble of placedBubbles) {
+        const overlapsHorizontally =
+          Math.abs(x - placedBubble.x) < (bubble.width + placedBubble.width) * 0.5 + 8;
+        const overlapsVertically =
+          Math.abs(y - placedBubble.y) < (bubble.height + placedBubble.height) * 0.5 + 8;
+
+        if (overlapsHorizontally && overlapsVertically) {
+          y = placedBubble.y - placedBubble.height * 0.5 - bubble.height * 0.5 - 10;
+        }
+      }
+
+      let moved = true;
+      while (moved) {
+        moved = false;
+        for (const exclusionRect of exclusionRects) {
+          if (
+            this.rectsOverlap(
+              x,
+              y,
+              bubble.width,
+              bubble.height,
+              exclusionRect.x,
+              exclusionRect.y,
+              exclusionRect.width,
+              exclusionRect.height
+            )
+          ) {
+            y =
+              exclusionRect.y -
+              exclusionRect.height * 0.5 -
+              bubble.height * 0.5 -
+              BUBBLE_TUNING.clearance;
+            moved = true;
+          }
+        }
+      }
+
+      y = Phaser.Math.Clamp(
+        y,
+        worldView.y + bubble.height * 0.5 + BUBBLE_TUNING.margin,
+        worldView.bottom - bubble.height * 0.5 - BUBBLE_TUNING.margin
+      );
+
       bubble.container.setPosition(x, y);
+      placedBubbles.push({
+        x,
+        y,
+        width: bubble.width,
+        height: bubble.height
+      });
     }
+  }
+
+  private getSpeechBubbleExclusionRects(): WorldRect[] {
+    const rects: WorldRect[] = [
+      {
+        x: this.state.owner.x,
+        y: this.ownerSprite.y - OWNER_RENDER.height * 0.34,
+        width: OWNER_RENDER.width * 0.72,
+        height: OWNER_RENDER.height * 0.86
+      },
+      {
+        x: this.state.dog.x,
+        y: this.dogSprite.y - DOG_RENDER.height * 0.18,
+        width: DOG_RENDER.width * 0.88,
+        height: DOG_RENDER.height * 0.62
+      }
+    ];
+
+    for (const visual of this.distractionVisuals.values()) {
+      if (!visual.visible) {
+        continue;
+      }
+
+      const bounds = visual.getBounds();
+      rects.push({
+        x: bounds.centerX,
+        y: bounds.centerY,
+        width: bounds.width,
+        height: bounds.height
+      });
+    }
+
+    return rects;
+  }
+
+  private rectsOverlap(
+    ax: number,
+    ay: number,
+    aw: number,
+    ah: number,
+    bx: number,
+    by: number,
+    bw: number,
+    bh: number
+  ): boolean {
+    return (
+      Math.abs(ax - bx) < (aw + bw) * 0.5 &&
+      Math.abs(ay - by) < (ah + bh) * 0.5
+    );
   }
 
   private getSpeechBubbleAnchorPosition(
@@ -1285,14 +1361,14 @@ export class RunScene extends Phaser.Scene {
     if (anchor.kind === "owner") {
       return {
         x: this.state.owner.x,
-        y: this.ownerSprite.y - 4
+        y: this.ownerSprite.y - OWNER_RENDER.height * 0.72
       };
     }
 
     if (anchor.kind === "shiba") {
       return {
         x: this.state.dog.x,
-        y: this.dogSprite.y
+        y: this.dogSprite.y - DOG_RENDER.height * 0.56
       };
     }
 
@@ -1305,13 +1381,13 @@ export class RunScene extends Phaser.Scene {
     if (anchor.role === "owner") {
       return {
         x: visual.x - 74 * direction,
-        y: visual.y - 106
+        y: visual.y - 162
       };
     }
 
     return {
       x: visual.x + 48 * direction,
-      y: visual.y - 68
+      y: visual.y - 120
     };
   }
 

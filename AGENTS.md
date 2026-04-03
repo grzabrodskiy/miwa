@@ -3,6 +3,13 @@
 ## Product
 Build a polished web-first 2D side-scrolling game where an owner walks a Shiba through a sequence of destinations and then returns home.
 
+## For visual iteration tasks:
+- Implement only the explicitly requested changes.
+- Do not combine pending requests into one pass.
+- After each pass, report each requested item separately as done/not done.
+- If the task is visual and uncertain, prefer smaller changes and stop for review.
+- Do not describe a change as fixed unless it is directly addressed in code.
+
 ## Fixed technical decisions
 - Use Phaser 3 + TypeScript + Vite for the actual game.
 - React is allowed only for shell UI outside the gameplay canvas.
